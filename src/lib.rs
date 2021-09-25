@@ -151,6 +151,81 @@ bitflags! {
         /// validation layer. You can ignore them.
         /// `> vkBindBufferMemory(): Binding memory to buffer 0x2d but vkGetBufferMemoryRequirements() has not been called on that buffer.`
         const KHR_DEDICATED_ALLOCATION = 0x0000_0002;
+
+        /// Enables usage of VK_KHR_bind_memory2 extension.
+        ///
+        /// The flag works only if VmaAllocatorCreateInfo::vulkanApiVersion `== VK_API_VERSION_1_0`.
+        /// When it is `VK_API_VERSION_1_1`, the flag is ignored because the extension has been promoted to Vulkan 1.1.
+        ///
+        /// You may set this flag only if you found out that this device extension is supported,
+        /// you enabled it while creating Vulkan device passed as VmaAllocatorCreateInfo::device,
+        /// and you want it to be used internally by this library.
+        ///
+        /// The extension provides functions `vkBindBufferMemory2KHR` and `vkBindImageMemory2KHR`,
+        /// which allow to pass a chain of `pNext` structures while binding.
+        /// This flag is required if you use `pNext` parameter in `vmaBindBufferMemory2()` or `vmaBindImageMemory2()`.
+        const KHR_BIND_MEMORY2 = 0x00000004;
+
+        /// Enables usage of `VK_EXT_memory_budget` extension.
+        ///
+        /// You may set this flag only if you found out that this device extension is supported,
+        /// you enabled it while creating Vulkan device passed as `VmaAllocatorCreateInfo::device`,
+        /// and you want it to be used internally by this library, along with another instance extension
+        /// `VK_KHR_get_physical_device_properties2`, which is required by it (or Vulkan 1.1, where this extension is promoted).
+        ///
+        /// The extension provides query for current memory usage and budget, which will probably
+        /// be more accurate than an estimation used by the library otherwise.
+        const EXT_MEMORY_BUDGET = 0x00000008;
+
+        /// Enables usage of `VK_AMD_device_coherent_memory` extension.
+        ///
+        /// You may set this flag only if you:
+        /// - Found out that this device extension is supported and enabled it while creating Vulkan
+        /// device passed as `VmaAllocatorCreateInfo::device`
+        /// - Checked that `VkPhysicalDeviceCoherentMemoryFeaturesAMD::deviceCoherentMemory` is true
+        /// and set it while creating the Vulkan device,
+        /// - Want it to be used internally by this library.
+        ///
+        /// The extension and accompanying device feature provide access to memory types with
+        /// `VK_MEMORY_PROPERTY_DEVICE_COHERENT_BIT_AMD` and `VK_MEMORY_PROPERTY_DEVICE_UNCACHED_BIT_AMD` flags.
+        /// They are useful mostly for writing breadcrumb markers - a common method for debugging GPU crash/hang/TDR.
+        ///
+        /// When the extension is not enabled, such memory types are still enumerated, but their usage is illegal.
+        /// To protect from this error, if you don't create the allocator with this flag, it will
+        /// refuse to allocate any memory or create a custom pool in such memory type,
+        /// returning `VK_ERROR_FEATURE_NOT_PRESENT`.
+        const AMD_DEVICE_COHERENT_MEMORY = 0x00000010;
+
+        /// Enables usage of "buffer device address" feature, which allows you to use function
+        /// `vkGetBufferDeviceAddress*` to get raw GPU pointer to a buffer and pass it for usage inside a shader.
+        ///
+        /// You may set this flag only if you:
+        /// 1. (For Vulkan version < 1.2) Found as available and enabled device extension `VK_KHR_buffer_device_address`.
+        /// This extension is promoted to core Vulkan 1.2.
+        /// 2. Found as available and enabled device feature `VkPhysicalDeviceBufferDeviceAddressFeatures::bufferDeviceAddress`.
+        ///
+        /// When this flag is set, you can create buffers with `VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT` using VMA.
+        /// The library automatically adds `VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT` to
+        /// allocated memory blocks wherever it might be needed.
+        ///
+        /// For more information, see documentation chapter enabling_buffer_device_address.
+        const BUFFER_DEVICE_ADDRESS = 0x00000020;
+
+        /// Enables usage of VK_EXT_memory_priority extension in the library.
+        ///
+        /// You may set this flag only if you found available and enabled this device extension,
+        /// along with `VkPhysicalDeviceMemoryPriorityFeaturesEXT::memoryPriority == VK_TRUE`,
+        /// while creating Vulkan device passed as VmaAllocatorCreateInfo::device.
+        ///
+        /// When this flag is used, `VmaAllocationCreateInfo::priority` and `VmaPoolCreateInfo::priority`
+        /// are used to set priorities of allocated Vulkan memory. Without it, these variables are ignored.
+        ///
+        /// A priority must be a floating-point value between 0 and 1, indicating the priority of the allocation relative to other memory allocations.
+        /// Larger values are higher priority. The granularity of the priorities is implementation-dependent.
+        /// It is automatically passed to every call to `vkAllocateMemory` done by the library using structure `VkMemoryPriorityAllocateInfoEXT`.
+        /// The value to be used for default priority is 0.5.
+        /// For more details, see the documentation of the `VK_EXT_memory_priority` extension.
+        const EXT_MEMORY_PRIORITY = 0x00000040;
     }
 }
 
@@ -163,6 +238,9 @@ impl Default for AllocatorCreateFlags {
 
 /// Description of an `Allocator` to be created.
 pub struct AllocatorCreateInfo<'a> {
+    /// Flags for created allocator.
+    pub flags: AllocatorCreateFlags,
+
     /// Vulkan physical device. It must be valid throughout whole lifetime of created allocator.
     pub physical_device: ash::vk::PhysicalDevice,
 
@@ -172,12 +250,12 @@ pub struct AllocatorCreateInfo<'a> {
     /// Vulkan instance. It must be valid throughout whole lifetime of created allocator.
     pub instance: ash::Instance,
 
-    /// Flags for created allocator.
-    pub flags: AllocatorCreateFlags,
-
     /// Preferred size of a single `ash::vk::DeviceMemory` block to be allocated from large heaps > 1 GiB.
     /// Set to 0 to use default, which is currently 256 MiB.
-    pub preferred_large_heap_block_size: usize,
+    pub preferred_large_heap_block_size: vk::DeviceSize,
+
+    /// Custom CPU memory allocation callbacks.
+    pub allocation_callbacks: Option<vk::AllocationCallbacks>,
 
     /// Maximum number of additional frames that are in use at the same time as current frame.
     ///
@@ -219,9 +297,6 @@ pub struct AllocatorCreateInfo<'a> {
     /// also be controlled using the `VK_AMD_memory_overallocation_behavior` extension.
     pub heap_size_limits: Option<&'a [ash::vk::DeviceSize]>,
 
-    /// Custom CPU memory allocation callbacks.
-    pub allocation_callbacks: Option<vk::AllocationCallbacks>,
-
     /// The highest version of Vulkan that the application is designed to use.
     /// It must be a value in the format as created by macro `VK_MAKE_VERSION` or a constant like:
     /// `VK_API_VERSION_1_1`, `VK_API_VERSION_1_0`. The patch version number specified is ignored.
@@ -243,36 +318,44 @@ fn ffi_to_result(result: vk::Result) -> VkResult<()> {
 
 /// Converts an `AllocationCreateInfo` struct into the raw representation.
 fn allocation_create_info_to_ffi(info: &AllocationCreateInfo) -> ffi::VmaAllocationCreateInfo {
-    let mut create_info: ffi::VmaAllocationCreateInfo = unsafe { mem::zeroed() };
-    create_info.usage = match &info.usage {
-        MemoryUsage::Unknown => ffi::VmaMemoryUsage_VMA_MEMORY_USAGE_UNKNOWN,
-        MemoryUsage::GpuOnly => ffi::VmaMemoryUsage_VMA_MEMORY_USAGE_GPU_ONLY,
-        MemoryUsage::CpuOnly => ffi::VmaMemoryUsage_VMA_MEMORY_USAGE_CPU_ONLY,
-        MemoryUsage::CpuToGpu => ffi::VmaMemoryUsage_VMA_MEMORY_USAGE_CPU_TO_GPU,
-        MemoryUsage::GpuToCpu => ffi::VmaMemoryUsage_VMA_MEMORY_USAGE_GPU_TO_CPU,
-    };
-    create_info.flags = info.flags.bits();
-    create_info.requiredFlags = info.required_flags;
-    create_info.preferredFlags = info.preferred_flags;
-    create_info.memoryTypeBits = info.memory_type_bits;
-    create_info.pool = match info.pool {
-        Some(pool) => pool,
-        None => unsafe { mem::zeroed() },
-    };
-    create_info.pUserData = info.user_data.unwrap_or(::std::ptr::null_mut());
-    create_info
+    ffi::VmaAllocationCreateInfo {
+        flags: info.flags.bits(),
+        usage: match info.usage {
+            MemoryUsage::Unknown => ffi::VmaMemoryUsage_VMA_MEMORY_USAGE_UNKNOWN,
+            MemoryUsage::GpuOnly => ffi::VmaMemoryUsage_VMA_MEMORY_USAGE_GPU_ONLY,
+            MemoryUsage::CpuOnly => ffi::VmaMemoryUsage_VMA_MEMORY_USAGE_CPU_ONLY,
+            MemoryUsage::CpuToGpu => ffi::VmaMemoryUsage_VMA_MEMORY_USAGE_CPU_TO_GPU,
+            MemoryUsage::GpuToCpu => ffi::VmaMemoryUsage_VMA_MEMORY_USAGE_GPU_TO_CPU,
+            MemoryUsage::CpuCopy => ffi::VmaMemoryUsage_VMA_MEMORY_USAGE_CPU_COPY,
+            MemoryUsage::GpuLazilyAllocated => {
+                ffi::VmaMemoryUsage_VMA_MEMORY_USAGE_GPU_LAZILY_ALLOCATED
+            }
+        },
+        requiredFlags: info.required_flags,
+        preferredFlags: info.preferred_flags,
+        memoryTypeBits: info.memory_type_bits,
+        pool: match info.pool {
+            Some(pool) => pool,
+            None => unsafe { mem::zeroed() },
+        },
+        pUserData: info.user_data.unwrap_or(::std::ptr::null_mut()),
+        priority: info.priority,
+    }
 }
 
 /// Converts an `AllocatorPoolCreateInfo` struct into the raw representation.
 fn pool_create_info_to_ffi(info: &AllocatorPoolCreateInfo) -> ffi::VmaPoolCreateInfo {
-    let mut create_info: ffi::VmaPoolCreateInfo = unsafe { mem::zeroed() };
-    create_info.memoryTypeIndex = info.memory_type_index;
-    create_info.flags = info.flags.bits();
-    create_info.blockSize = info.block_size as vk::DeviceSize;
-    create_info.minBlockCount = info.min_block_count;
-    create_info.maxBlockCount = info.max_block_count;
-    create_info.frameInUseCount = info.frame_in_use_count;
-    create_info
+    ffi::VmaPoolCreateInfo {
+        memoryTypeIndex: info.memory_type_index,
+        flags: info.flags.bits(),
+        blockSize: info.block_size as vk::DeviceSize,
+        minBlockCount: info.min_block_count,
+        maxBlockCount: info.max_block_count,
+        frameInUseCount: info.frame_in_use_count,
+        priority: info.priority,
+        minAllocationAlignment: info.min_allocation_alignment,
+        pMemoryAllocateNext: info.memory_allocate_next.unwrap_or(std::ptr::null_mut()),
+    }
 }
 
 /// Intended usage of memory.
@@ -324,6 +407,24 @@ pub enum MemoryUsage {
     /// - Resources written by device, read by host - results of some computations, e.g. screen capture, average scene luminance for HDR tone mapping.
     /// - Any resources read or accessed randomly on host, e.g. CPU-side copy of vertex buffer used as source of transfer, but also used for collision detection.
     GpuToCpu,
+
+    /// CPU memory - memory that is preferably not `DEVICE_LOCAL`, but also not guaranteed to be `HOST_VISIBLE`.
+    ///
+    /// Usage:
+    /// - Staging copy of resources moved from GPU memory to CPU memory as part
+    /// of custom paging/residency mechanism, to be moved back to GPU memory when needed.
+    CpuCopy,
+
+    /// Lazily allocated GPU memory having `VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT`.
+    /// Exists mostly on mobile platforms. Using it on desktop PC or other GPUs with no such memory
+    /// type present will fail the allocation.
+    ///
+    /// Usage:
+    /// - Memory for transient attachment images (color attachments, depth attachments etc.),
+    /// created with `VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT`.
+    ///
+    /// Allocations with this usage are always created as dedicated - it implies #VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT.
+    GpuLazilyAllocated,
 }
 
 bitflags! {
@@ -474,6 +575,9 @@ bitflags! {
 /// Description of an `Allocation` to be created.
 #[derive(Debug, Clone)]
 pub struct AllocationCreateInfo {
+    /// Flags for configuring the allocation
+    pub flags: AllocationCreateFlags,
+
     /// Intended usage of memory.
     ///
     /// You can leave `MemoryUsage::UNKNOWN` if you specify memory requirements
@@ -481,9 +585,6 @@ pub struct AllocationCreateInfo {
     ///
     /// If `pool` is not `None`, this member is ignored.
     pub usage: MemoryUsage,
-
-    /// Flags for configuring the allocation
-    pub flags: AllocationCreateFlags,
 
     /// Flags that must be set in a Memory Type chosen for an allocation.
     ///
@@ -521,6 +622,14 @@ pub struct AllocationCreateInfo {
     /// null-terminated string. The string will be then copied to internal buffer, so it
     /// doesn't need to be valid after allocation call.
     pub user_data: Option<*mut ::std::os::raw::c_void>,
+
+    /// A floating-point value between 0 and 1, indicating the priority of the allocation relative
+    /// to other memory allocations.
+    ///
+    /// It is used only when #VMA_ALLOCATOR_CREATE_EXT_MEMORY_PRIORITY_BIT flag was used during creation of the #VmaAllocator object
+    /// and this allocation ends up as dedicated or is explicitly forced as dedicated using #VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT.
+    /// Otherwise, it has the priority of a memory block where it is placed and this variable is ignored.
+    pub priority: f32,
 }
 
 /// Construct `AllocationCreateInfo` with default values
@@ -534,6 +643,7 @@ impl Default for AllocationCreateInfo {
             memory_type_bits: 0,
             pool: None,
             user_data: None,
+            priority: 0.0,
         }
     }
 }
@@ -582,6 +692,30 @@ pub struct AllocatorPoolCreateInfo {
     /// If you want to allow any allocations other than used in the current frame to become lost,
     /// set this value to 0.
     pub frame_in_use_count: u32,
+
+    /// A floating-point value between 0 and 1, indicating the priority of the allocations in this
+    /// pool relative to other memory allocations.
+    ///
+    /// It is used only when #VMA_ALLOCATOR_CREATE_EXT_MEMORY_PRIORITY_BIT flag was used during creation of the #VmaAllocator object.
+    /// Otherwise, this variable is ignored.
+    pub priority: f32,
+
+    /// Additional minimum alignment to be used for all allocations created from this pool. Can be 0.
+    ///
+    /// Leave 0 (default) not to impose any additional alignment. If not 0, it must be a power of two.
+    /// It can be useful in cases where alignment returned by Vulkan by functions like `vkGetBufferMemoryRequirements` is not enough,
+    /// e.g. when doing interop with OpenGL.
+    pub min_allocation_alignment: vk::DeviceSize,
+
+    /// Additional `pNext` chain to be attached to `VkMemoryAllocateInfo` used for every allocation made by this pool. Optional.
+    ///
+    /// Optional, can be null. If not null, it must point to a `pNext` chain of structures that can be attached to `VkMemoryAllocateInfo`.
+    /// It can be useful for special needs such as adding `VkExportMemoryAllocateInfoKHR`.
+    /// Structures pointed by this member must remain alive and unchanged for the whole lifetime of the custom pool.
+    ///
+    /// Please note that some structures, e.g. `VkMemoryPriorityAllocateInfoEXT`, `VkMemoryDedicatedAllocateInfoKHR`,
+    /// can be attached automatically by this library when using other, more convenient of its features.
+    pub memory_allocate_next: Option<*mut ::std::os::raw::c_void>,
 }
 
 /// Construct `AllocatorPoolCreateInfo` with default values
@@ -594,6 +728,9 @@ impl Default for AllocatorPoolCreateInfo {
             min_block_count: 0,
             max_block_count: 0,
             frame_in_use_count: 0,
+            priority: 0.0,
+            min_allocation_alignment: 0,
+            memory_allocate_next: None,
         }
     }
 }
