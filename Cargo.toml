@@ -13,14 +13,13 @@ license = "MIT/Apache-2.0"
 build = "build.rs"
 include = [
     "src/*.rs",
-    "gen/bindings.rs",
+    "src/*.cpp",
     "build.rs",
     "Cargo.toml",
-    "vendor/src/vk_mem_alloc.h",
-    "wrapper/vulkan/vk_platform.h",
-    "wrapper/vulkan/vulkan_core.h",
-    "wrapper/vulkan/vulkan.h",
-    "wrapper/vma_lib.cpp",
+    "extern/Vulkan-Headers/include/vulkan/vulkan.h",
+    "extern/Vulkan-Headers/include/vulkan/vulkan_core.h",
+    "extern/Vulkan-Headers/include/vulkan/vk_platform.h",
+    "extern/VulkanMemoryAllocator/include/vk_mem_alloc.h",
 ]
 edition = "2018"
 
@@ -34,10 +33,7 @@ bitflags = "1.2.1"
 
 [build-dependencies]
 cc = "1.0.50"
-
-[build-dependencies.bindgen]
-version = "0.59.1"
-optional = true
+bindgen = "0.59.1"
 
 [profile.release]
 lto = true
@@ -46,6 +42,5 @@ codegen-units = 1
 
 [features]
 default = []
-generate_bindings=["bindgen"]
 link_vulkan=[]
 recording=[]

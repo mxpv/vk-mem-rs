@@ -1,15 +1,11 @@
-#[cfg(feature = "generate_bindings")]
-extern crate bindgen;
-extern crate cc;
-
 use std::env;
+use std::path::PathBuf;
 
 fn main() {
     let mut build = cc::Build::new();
 
-    build.include("vendor/src");
-    build.include("wrapper");
-    build.include("wrapper/vulkan");
+    build.include("extern/Vulkan-Headers/include/vulkan");
+    build.include("extern/VulkanMemoryAllocator/include");
 
     // Disable VMA_ASSERT when rust assertions are disabled
     #[cfg(not(debug_assertions))]
@@ -39,11 +35,7 @@ fn main() {
     build.define("VMA_RECORDING_ENABLED", "1");
 
     // Add the files we build
-    let source_files = ["wrapper/vma_lib.cpp"];
-
-    for source_file in &source_files {
-        build.file(&source_file);
-    }
+    build.file("src/vma.cpp");
 
     let target = env::var("TARGET").unwrap();
     if target.contains("darwin") {
@@ -105,12 +97,11 @@ fn main() {
     build.compile("vma_cpp");
 
     link_vulkan();
-    generate_bindings("gen/bindings.rs");
+    generate_bindings();
 }
 
 #[cfg(feature = "link_vulkan")]
 fn link_vulkan() {
-    use std::path::PathBuf;
     let target = env::var("TARGET").unwrap();
     if target.contains("windows") {
         if let Ok(vulkan_sdk) = env::var("VULKAN_SDK") {
@@ -151,11 +142,10 @@ fn link_vulkan() {
 #[cfg(not(feature = "link_vulkan"))]
 fn link_vulkan() {}
 
-#[cfg(feature = "generate_bindings")]
-fn generate_bindings(output_file: &str) {
+fn generate_bindings() {
     let bindings = bindgen::Builder::default()
         .clang_arg("-I./wrapper")
-        .header("vendor/src/vk_mem_alloc.h")
+        .header("extern/VulkanMemoryAllocator/include/vk_mem_alloc.h")
         .rustfmt_bindings(true)
         .size_t_is_usize(true)
         .blocklist_type("__darwin_.*")
@@ -169,19 +159,16 @@ fn generate_bindings(output_file: &str) {
         .generate()
         .expect("Unable to generate bindings!");
 
+    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+
     bindings
-        .write_to_file(std::path::Path::new(output_file))
+        .write_to_file(out_path.join("bindings.rs"))
         .expect("Unable to write bindings!");
 }
 
-#[cfg(not(feature = "generate_bindings"))]
-fn generate_bindings(_: &str) {}
-
-#[cfg(feature = "generate_bindings")]
 #[derive(Debug)]
 struct FixAshTypes;
 
-#[cfg(feature = "generate_bindings")]
 impl bindgen::callbacks::ParseCallbacks for FixAshTypes {
     fn item_name(&self, original_item_name: &str) -> Option<String> {
         if original_item_name.starts_with("Vk") {

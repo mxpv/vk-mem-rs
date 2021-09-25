@@ -760,6 +760,7 @@ impl Allocator {
             pDeviceMemoryCallbacks: ::std::ptr::null(), // TODO: Add support
             pRecordSettings: ::std::ptr::null(),        // TODO: Add support
             vulkanApiVersion: create_info.vulkan_api_version,
+            pTypeExternalMemoryHandleTypes: std::ptr::null(),
         };
 
         let mut internal: ffi::VmaAllocator = mem::zeroed();
@@ -1107,36 +1108,6 @@ impl Allocator {
             allocations.len(),
             allocations.as_ptr() as *mut _,
         );
-    }
-
-    /// Tries to resize an allocation in place, if there is enough free memory after it.
-    ///
-    /// Tries to change allocation's size without moving or reallocating it.
-    /// You can both shrink and grow allocation size.
-    /// When growing, it succeeds only when the allocation belongs to a memory block with enough
-    /// free space after it.
-    ///
-    /// Returns `ash::vk::Result::SUCCESS` if allocation's size has been successfully changed.
-    /// Returns `ash::vk::Result::ERROR_OUT_OF_POOL_MEMORY` if allocation's size could not be changed.
-    ///
-    /// After successful call to this function, `AllocationInfo::get_size` of this allocation changes.
-    /// All other parameters stay the same: memory pool and type, alignment, offset, mapped pointer.
-    ///
-    /// - Calling this function on allocation that is in lost state fails with result `ash::vk::Result::ERROR_VALIDATION_FAILED_EXT`.
-    /// - Calling this function with `new_size` same as current allocation size does nothing and returns `ash::vk::Result::SUCCESS`.
-    /// - Resizing dedicated allocations, as well as allocations created in pools that use linear
-    ///   or buddy algorithm, is not supported. The function returns `ash::vk::Result::ERROR_FEATURE_NOT_PRESENT` in such cases.
-    ///   Support may be added in the future.
-    pub unsafe fn resize_allocation(
-        &self,
-        allocation: Allocation,
-        new_size: usize,
-    ) -> VkResult<()> {
-        ffi_to_result(ffi::vmaResizeAllocation(
-            self.internal,
-            allocation,
-            new_size as vk::DeviceSize,
-        ))
     }
 
     /// Returns current information about specified allocation and atomically marks it as used in current frame.
