@@ -1651,19 +1651,7 @@ impl Allocator {
     /// no other functions may be called. Useful for ensuring a specific destruction
     /// order (for example, if an Allocator is a member of something that owns the Vulkan
     /// instance and destroys it in its own Drop).
-    pub unsafe fn destroy(&mut self) {
-        if !self.internal.is_null() {
-            ffi::vmaDestroyAllocator(self.internal);
-            self.internal = std::ptr::null_mut();
-        }
-    }
-}
-
-/// Custom `Drop` implementation to clean up internal allocation instance
-impl Drop for Allocator {
-    fn drop(&mut self) {
-        unsafe {
-            self.destroy();
-        }
+    pub unsafe fn destroy_allocator(&mut self) {
+        ffi::vmaDestroyAllocator(self.internal);
     }
 }
