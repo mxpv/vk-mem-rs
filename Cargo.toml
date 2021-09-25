@@ -42,5 +42,6 @@ codegen-units = 1
 
 [features]
 default = []
-link_vulkan=[]
-recording=[]
+link_vulkan = []
+recording = []
+detect_corruption = []

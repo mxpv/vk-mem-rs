@@ -1115,6 +1115,7 @@ impl Allocator {
     /// - `ash::vk::Result::ERROR_VALIDATION_FAILED_EXT` - corruption detection has been performed and found memory corruptions around one of the allocations.
     ///   `VMA_ASSERT` is also fired in that case.
     /// - Other value: Error returned by Vulkan, e.g. memory mapping failure.
+    #[cfg(feature = "detect_corruption")]
     pub unsafe fn check_pool_corruption(&self, pool: AllocatorPool) -> VkResult<()> {
         ffi_to_result(ffi::vmaCheckPoolCorruption(self.internal, pool))
     }
@@ -1428,6 +1429,7 @@ impl Allocator {
     /// - `ash::vk::Result::ERROR_VALIDATION_FAILED_EXT` - corruption detection has been performed and found memory corruptions around one of the allocations.
     ///   `VMA_ASSERT` is also fired in that case.
     /// - Other value: Error returned by Vulkan, e.g. memory mapping failure.
+    #[cfg(feature = "detect_corruption")]
     pub unsafe fn check_corruption(
         &self,
         memory_types: ash::vk::MemoryPropertyFlags,
