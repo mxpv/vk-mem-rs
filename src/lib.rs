@@ -1024,14 +1024,14 @@ impl Allocator {
     /// - `ash::vk::Device::destroy_buffer`
     pub unsafe fn find_memory_type_index_for_buffer_info(
         &self,
-        buffer_info: ash::vk::BufferCreateInfo,
+        buffer_info: &ash::vk::BufferCreateInfo,
         allocation_info: &AllocationCreateInfo,
     ) -> VkResult<u32> {
         let allocation_create_info = allocation_create_info_to_ffi(&allocation_info);
         let mut memory_type_index: u32 = 0;
         ffi_to_result(ffi::vmaFindMemoryTypeIndexForBufferInfo(
             self.internal,
-            &buffer_info,
+            buffer_info,
             &allocation_create_info,
             &mut memory_type_index,
         ))?;
@@ -1695,7 +1695,7 @@ impl Allocator {
     ///
     /// This is just a convenience function equivalent to:
     ///
-    /// ```ignore
+    /// ```text
     /// ash::vk::Device::destroy_buffer(buffer, None);
     /// Allocator::free_memory(allocator, allocation);
     /// ```
@@ -1747,7 +1747,7 @@ impl Allocator {
     ///
     /// This is just a convenience function equivalent to:
     ///
-    /// ```ignore
+    /// ```text
     /// ash::vk::Device::destroy_image(image, None);
     /// Allocator::free_memory(allocator, allocation);
     /// ```
@@ -1761,7 +1761,7 @@ impl Allocator {
     /// no other functions may be called. Useful for ensuring a specific destruction
     /// order (for example, if an Allocator is a member of something that owns the Vulkan
     /// instance and destroys it in its own Drop).
-    pub unsafe fn destroy_allocator(&mut self) {
+    pub unsafe fn destroy_allocator(&self) {
         ffi::vmaDestroyAllocator(self.internal);
     }
 }
