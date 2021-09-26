@@ -8,7 +8,7 @@ vk-mem
 ![MIT](https://img.shields.io/badge/license-MIT-blue.svg)
 ![APACHE2](https://img.shields.io/badge/license-APACHE2-blue.svg)
 
-This crate provides an FFI layer and idiomatic rust wrappers for the excellent AMD Vulkan Memory Allocator (VMA) C/C++ library.
+This crate provides an FFI layer and idiomatic rust wrappers for the excellent AMD Vulkan Memory Allocator (VMA) C/C++ library. This repo is a fork of [vk-mem-rs](https://github.com/gwihlidal/vk-mem-rs) crate from [@gwihlidal](https://github.com/gwihlidal), but includes latest VMA library and contains a few adjustments/optimizations (please have a look on [Difference from upstream](#difference-from-upstream) section for the full list of changes)
 
 - [Documentation](https://docs.rs/vk-mem)
 - [Release Notes](https://github.com/gwihlidal/vk-mem-rs/releases)
@@ -16,6 +16,17 @@ This crate provides an FFI layer and idiomatic rust wrappers for the excellent A
 - [VMA Documentation](https://gpuopen-librariesandsdks.github.io/VulkanMemoryAllocator/html/)
 - [GPU Open Announce](https://gpuopen.com/gaming-product/vulkan-memory-allocator/)
 - [GPU Open Update](https://gpuopen.com/vulkan-memory-allocator-2-3-0/)
+
+## Difference from upstream
+- Uses latest VMA version ([a778c86](https://github.com/mxpv/vk-mem-rs/commit/a778c8690953ef136c3524d5f3b2d3a3f67f04eb)).
+- Error handling is reworked, there is no dependency on `failure` crate (uses `VkResult` from `ash` instead) - ([738d909](https://github.com/mxpv/vk-mem-rs/commit/738d909ee67dc1eebea80dab35ce9caf2f9bcb94)).
+- Object handles are reworked to remove some `Vec` allocations ([a429782](https://github.com/mxpv/vk-mem-rs/commit/a429782fc03bf2260a4f44a4741ce9acd57bf6d4)).
+- All APIs are unsafe to be consistent and aligned with `ash` crate ([32f4170](https://github.com/mxpv/vk-mem-rs/commit/32f417065307e8f89cfe0ce5aa03e2da84620148)).
+- Does a few tricks with `bindgen`, so the generated code uses `ash` VK types intead of generated duplicates. This allowed to remove all `transmute` calls and have a lot cleaner code.
+- `gen/bindings.rs` is excluded (will call `bindgen` instead).
+- Vendors Vulkan headers as well to use latest changes.
+
+Upstream PR is [here](https://github.com/gwihlidal/vk-mem-rs/pull/58).
 
 ## Problem
 
